@@ -8,6 +8,7 @@ import org.apache.lucene.analysis.en.EnglishAnalyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
+import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
@@ -15,7 +16,6 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 
 import java.io.File;
-import java.io.FileFilter;
 import java.io.FileReader;
 import java.io.IOException;
 import java.lang.reflect.Type;
@@ -23,13 +23,15 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
-public class IndexFiles implements AutoCloseable {
+public class PlaylistIndexer implements AutoCloseable {
+
+    private final String playlistIndexDir = "src\\main\\resources\\index";
 
     private final IndexWriter writer;
 
-    public IndexFiles(String indexDirectoryPath) throws IOException {
+    public PlaylistIndexer() throws IOException {
         //this directory will contain the indexes
-        Directory indexDirectory = FSDirectory.open(Paths.get(indexDirectoryPath));
+        Directory indexDirectory = FSDirectory.open(Paths.get(playlistIndexDir));
 
         var analyzer = new StandardAnalyzer(EnglishAnalyzer.getDefaultStopSet());
         var indexWriterConfig = new IndexWriterConfig(analyzer);
@@ -58,12 +60,20 @@ public class IndexFiles implements AutoCloseable {
 
 
         //index playlist name
-        Field fileNameField = new TextField(Constants.PLAYLIST_NAME, playlist.name(), Field.Store.YES);
-        document.add(fileNameField);
+        Field pidField = new StringField(Constants.PLAYLIST_PID, playlist.pid().toString(), Field.Store.YES);
+        document.add(pidField);
+
+        //index playlist name
+        Field nameField = new TextField(Constants.PLAYLIST_NAME, playlist.name(), Field.Store.YES);
+        document.add(nameField);
 
         //index file contents
         Field contentField = new TextField(Constants.PLAYLIST_CONTENTS, playlist.content(), Field.Store.YES);
         document.add(contentField);
+
+        //index track uri list
+        Field trackUriListField = new StringField(Constants.PLAYLIST_TRACK_URI_LIST, playlist.trackUriList(), Field.Store.YES);
+        document.add(trackUriListField);
 
         return document;
     }
@@ -78,14 +88,13 @@ public class IndexFiles implements AutoCloseable {
 
         for (Playlist playlist : playlistList) {
             Document document = getDocument(playlist);
-            // TODO: OpenMode.CREATE
             writer.addDocument(document);
         }
 
 
     }
 
-    public void createIndex(String dataDirPath, FileFilter filter) throws IOException {
+    public void createIndex(String dataDirPath) throws IOException {
         //get all files in the data directory
         File[] files = new File(dataDirPath).listFiles();
 
@@ -94,7 +103,6 @@ public class IndexFiles implements AutoCloseable {
                     && !file.isHidden()
                     && file.exists()
                     && file.canRead()
-                    && filter.accept(file)
             ) {
                 indexFile(file);
             }
